@@ -1,0 +1,4 @@
+# ignore the large lfw image files:
+lfw/
+
+# data download link -> http://vis-www.cs.umass.edu/lfw/lfw.tgz (or you can try the variants of the same dataset)
