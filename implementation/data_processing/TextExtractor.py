@@ -124,3 +124,15 @@ def save_pickle(obj, file_name):
     """
     with open(file_name, 'wb') as dumper:
         pickle.dump(obj, dumper, pickle.HIGHEST_PROTOCOL)
+
+
+def load_pickle(file_name):
+    """
+    load a pickle object from the given pickle file
+    :param file_name: path to the pickle file
+    :return: obj => read pickle object
+    """
+    with open(file_name, "rb") as pick:
+        obj = pickle.load(pick)
+
+    return obj
