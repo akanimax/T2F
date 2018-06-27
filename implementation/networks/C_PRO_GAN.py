@@ -167,10 +167,11 @@ class Discriminator(th.nn.Module):
                 # return the output tensor
                 return fwd
 
-        def __init__(self, in_channels):
+        def __init__(self, in_channels, embedding_size):
             """
             constructor of the class
             :param in_channels: number of input channels
+            :param embedding_size: size of the embedding
             """
             from torch.nn import Conv2d, LeakyReLU
 
@@ -180,15 +181,18 @@ class Discriminator(th.nn.Module):
             self.batch_discriminator = self.MinibatchStdDev()
             self.conv_1 = Conv2d(in_channels + 1, in_channels, (3, 3), padding=1)
             self.conv_2 = Conv2d(in_channels, in_channels, (4, 4))
-            self.conv_3 = Conv2d(in_channels, 1, (1, 1))
+
+            # final conv layer emulates a fully connected layer
+            self.conv_3 = Conv2d(in_channels + embedding_size, 1, (1, 1))
 
             # leaky_relu:
             self.lrelu = LeakyReLU(0.2)
 
-        def forward(self, x):
+        def forward(self, x, embedding):
             """
             forward pass of the FinalBlock
             :param x: input
+            :param embedding: embedding (for conditional GAN)
             :return: y => output
             """
             # minibatch_std_dev layer
@@ -197,7 +201,11 @@ class Discriminator(th.nn.Module):
             # define the computations
             y = self.lrelu(self.conv_1(y))
             y = self.lrelu(self.conv_2(y))
-            y = self.lrelu(self.conv_3(y))
+
+            # concatenate the text embedding to the features before the last
+            # fully connected layer
+            y = th.cat((y, th.unsqueeze(th.unsqueeze(embedding, -1), -1)), dim=1)
+            y = self.lrelu(self.conv_3(y))  # final fully connected layer
 
             # flatten the output raw discriminator scores
             return y.view(-1)
@@ -235,9 +243,10 @@ class Discriminator(th.nn.Module):
 
             return y
 
-    def __init__(self, height=7, feature_size=512):
+    def __init__(self, embedding_size, height=7, feature_size=512):
         """
         constructor for the class
+        :param embedding_size: embedding_size for conditional discrimination
         :param height: total height of the discriminator (Must be equal to the Generator depth)
         :param feature_size: size of the deepest features extracted
                              (Must be equal to Generator latent_size)
@@ -254,8 +263,9 @@ class Discriminator(th.nn.Module):
         # create state of the object
         self.height = height
         self.feature_size = feature_size
+        self.embedding_size = embedding_size
 
-        self.final_block = self.FinalBlock(self.feature_size)
+        self.final_block = self.FinalBlock(self.feature_size, embedding_size)
 
         # create a module list of the other required general convolution blocks
         self.layers = ModuleList([])  # initialize to empty list
@@ -282,10 +292,11 @@ class Discriminator(th.nn.Module):
         # register the temporary downSampler
         self.temporaryDownsampler = AvgPool2d(2)
 
-    def forward(self, x, height, alpha):
+    def forward(self, x, embedding, height, alpha):
         """
         forward pass of the discriminator
         :param x: input to the network
+        :param embedding: conditional discrimination
         :param height: current height of operation (Progressive GAN)
         :param alpha: current value of alpha for fade-in
         :return: out => raw prediction values (WGAN-GP)
@@ -305,7 +316,7 @@ class Discriminator(th.nn.Module):
         else:
             y = self.rgb_to_features[0](x)
 
-        out = self.final_block(y)
+        out = self.final_block(y, embedding)
 
         return out
 
@@ -313,10 +324,11 @@ class Discriminator(th.nn.Module):
 class ProGAN:
     """ Wrapper around the Generator and the Discriminator """
 
-    def __init__(self, depth=7, latent_size=64, learning_rate=0.001, beta_1=0,
+    def __init__(self, embedding_size, depth=7, latent_size=64, learning_rate=0.001, beta_1=0,
                  beta_2=0.99, eps=1e-8, drift=0.001, n_critic=1, device=th.device("cpu")):
         """
         constructor for the class
+        :param embedding_size: embedding size for the conditional output
         :param depth: depth of the GAN (will be used for each generator and discriminator)
         :param latent_size: latent size of the manifold used by the GAN
         :param learning_rate: learning rate for Adam
@@ -331,9 +343,11 @@ class ProGAN:
 
         # Create the Generator and the Discriminator
         self.gen = Generator(depth, latent_size).to(device)
-        self.dis = Discriminator(depth, latent_size).to(device)
+        self.dis = Discriminator(embedding_size, depth, latent_size).to(device)
 
         # state of the object
+        self.latent_size = latent_size
+        self.embedding_size = embedding_size
         self.depth = depth
         self.n_critic = n_critic
         self.device = device
@@ -346,11 +360,13 @@ class ProGAN:
         self.dis_optim = Adam(self.dis.parameters(), lr=learning_rate,
                               betas=(beta_1, beta_2), eps=eps)
 
-    def __gradient_penalty(self, real_samps, fake_samps, depth, alpha, reg_lambda=10):
+    def __gradient_penalty(self, real_samps, fake_samps, embedding,
+                           depth, alpha, reg_lambda=10):
         """
         private helper for calculating the gradient penalty
         :param real_samps: real samples
         :param fake_samps: fake samples
+        :param embedding: text embedding for conditional discrimination
         :param depth: current depth in the optimization
         :param alpha: current alpha for fade-in
         :param reg_lambda: regularisation lambda
@@ -367,7 +383,7 @@ class ProGAN:
         merged = (epsilon * real_samps) + ((1 - epsilon) * fake_samps)
 
         # forward pass
-        op = self.dis(merged, depth, alpha)
+        op = self.dis.forward(merged, embedding, depth, alpha)
 
         # obtain gradient of op wrt. merged
         gradient = grad(outputs=op, inputs=merged, create_graph=True,
@@ -396,10 +412,11 @@ class ProGAN:
         for p in self.dis.parameters():
             p.requires_grad = True
 
-    def optimize_discriminator(self, noise, real_batch, depth, alpha):
+    def optimize_discriminator(self, noise, embeddings, real_batch, depth, alpha):
         """
         performs one step of weight update on discriminator using the batch of data
         :param noise: input noise of sample generation
+        :param embeddings: text embeddings for conditional discrimination
         :param real_batch: real samples batch
         :param depth: current depth of optimization
         :param alpha: current alpha for fade-in
@@ -414,21 +431,20 @@ class ProGAN:
         down_sample_factor = int(np.power(2, self.depth - depth - 1))
         real_samples = AvgPool2d(down_sample_factor)(real_batch)
 
-        print("Downsampled images_sizes:", real_samples.shape)
-
         loss_val = 0
         for _ in range(self.n_critic):
             # generate a batch of samples
             fake_samples = self.gen(noise, depth, alpha)
 
             # calculate the WGAN-GP (gradient penalty)
-            gp = self.__gradient_penalty(real_samples, fake_samples, depth, alpha)
+            gp = self.__gradient_penalty(real_samples, fake_samples, embeddings,
+                                         depth, alpha)
 
             # define the (Wasserstein) loss
-            fake_out = self.dis(fake_samples, depth, alpha)
-            real_out = self.dis(real_samples, depth, alpha)
-            loss = th.mean(fake_out) - th.mean(real_out) + \
-                   gp + (self.drift * th.mean(real_out ** 2))
+            fake_out = self.dis(fake_samples, embeddings, depth, alpha)
+            real_out = self.dis(real_samples, embeddings, depth, alpha)
+            loss = (th.mean(fake_out) - th.mean(real_out)
+                    + gp + (self.drift * th.mean(real_out ** 2)))
 
             # optimize discriminator
             self.dis_optim.zero_grad()
@@ -439,10 +455,11 @@ class ProGAN:
 
         return -(loss_val / self.n_critic)
 
-    def optimize_generator(self, noise, depth, alpha):
+    def optimize_generator(self, noise, embeddings, depth, alpha):
         """
         performs one step of weight update on generator for the given batch_size
         :param noise: input random / conditional noise required for generating samples
+        :param embeddings: text embeddings for conditional discrimination
         :param depth: depth of the network at which optimization is done
         :param alpha: value of alpha for fade-in effect
         :return: current loss (Wasserstein estimate)
@@ -453,7 +470,7 @@ class ProGAN:
         # generate fake samples:
         fake_samples = self.gen(noise, depth, alpha)
 
-        loss = -th.mean(self.dis(fake_samples, depth, alpha))
+        loss = -th.mean(self.dis(fake_samples, embeddings, depth, alpha))
 
         # optimize the generator
         self.gen_optim.zero_grad()
@@ -462,66 +479,3 @@ class ProGAN:
 
         # return the loss value
         return -loss.item()
-
-
-# if __name__ == '__main__':
-#     from data_processing.DataLoader import Face2TextDataset, get_data_loader, get_transform
-#     from networks.TextEncoder import Encoder
-#     from networks.ConditionAugmentation import ConditionAugmentor
-#
-#     dataset = Face2TextDataset(
-#         "../processed_annotations/processed_text.pkl",
-#         "../../data/LFW/lfw",
-#         img_transform=get_transform((256, 256))
-#     )
-#
-#     dl = get_data_loader(dataset, 16, 3)
-#
-#     batch = iter(dl).next()
-#
-#     captions, images = batch
-#     random_caption = captions[1: 3]
-#     random_images = images[1: 3]
-#     print("Images shape:", random_images.shape)
-#
-#     # print(random_caption)
-#
-#     # perform the forward pass of the network
-#     encoder = Encoder(128, len(dataset.vocab), 32, 3)
-#     gan_input = encoder(random_caption)
-#     # print(gan_input.shape)
-#     # print(gan_input)
-#
-#     # perform conditioning augmentation
-#     c_augmentor = ConditionAugmentor(gan_input.shape[-1], latent_size=32)
-#     c_not_hats = c_augmentor(gan_input)
-#
-#     print(c_not_hats)
-#     print("C_not_hats:", c_not_hats.shape)
-#
-#     # create random noise:
-#     z = th.randn(2, 32)
-#     gan_input = th.cat((c_not_hats, z), dim=-1)
-#     print("GAN input shape:", gan_input.shape)
-#
-#     # # perform forward pass on it:
-#     # generator = Generator(depth=8, latent_size=64)
-#     # print("performing gan forward pass ...")
-#     # out = generator(gan_input[:, :64], 0, 0.3)
-#     # print("Generator output:", out.shape)
-#     #
-#     # print("displaying image by resizing ...")
-#     # img = (out[0].permute(1, 2, 0).detach().numpy() / 2) + 0.5
-#     # plt.imshow(cv2.resize(img, (256, 256)))
-#     # plt.show()
-#     #
-#     # discriminator = Discriminator(height=8, feature_size=64)
-#     # d_out = discriminator(out, 0, 0.3)
-#     # print(d_out)
-#     # print("Discriminator out shape:", d_out.shape)
-#
-#     # create a GAN
-#     c_pro_gan = ProGAN()
-#
-#     c_pro_gan.optimize_discriminator(gan_input, random_images, 6, 0.3)
-#     c_pro_gan.optimize_generator(gan_input, 6, 0.003)

@@ -1,4 +1,4 @@
-""" Script demonstrating the Face2Text dataset. 
+""" Script demonstrating the Face2Text dataset.
     Please activate The DeepLearning environment before executing this script.
 """
 
@@ -7,7 +7,7 @@ import cv2
 import os
 
 
-descriptions_file = "Face2Text/face2text_v0.1/raw.json"
+descriptions_file = "Face2Text/face2text_v0.1/clean.json"
 
 # load the json data:
 with open(descriptions_file, "r") as j_desc:

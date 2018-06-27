@@ -42,6 +42,7 @@ class Face2TextDataset(Dataset):
         self.rev_vocab = data_obj['rev_vocab']
         self.vocab = data_obj['vocab']
         self.images = data_obj['images']
+        self.vocab_size = len(self.vocab)
 
     def __len__(self):
         """

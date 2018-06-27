@@ -8,13 +8,14 @@ class Encoder(th.nn.Module):
         uses LSTM internally
     """
 
-    def __init__(self, embedding_size, vocab_size, hidden_size, num_layers):
+    def __init__(self, embedding_size, vocab_size, hidden_size, num_layers, device=th.device("cpu")):
         """
         constructor of the class
         :param embedding_size: size of the input embeddings
         :param vocab_size: size of the vocabulary
         :param hidden_size: hidden size of the LSTM network
         :param num_layers: number of LSTM layers in the network
+        :param device: device on which to run the Module
         """
         super(Encoder, self).__init__()
 
@@ -30,7 +31,7 @@ class Encoder(th.nn.Module):
             Embedding(self.vocab_size, self.embedding_size, padding_idx=0),
             LSTM(self.embedding_size, self.hidden_size,
                  self.num_layers, batch_first=True)
-        )
+        ).to(device)
 
     def forward(self, x):
         """

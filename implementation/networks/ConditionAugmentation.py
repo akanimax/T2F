@@ -9,22 +9,24 @@ class ConditionAugmentor(th.nn.Module):
         uses the reparameterization trick from VAE paper.
     """
 
-    def __init__(self, input_size, latent_size):
+    def __init__(self, input_size, latent_size, device=th.device("cpu")):
         """
         constructor of the class
         :param input_size: input size to the augmentor
         :param latent_size: required output size
+        :param device: device on which to run the Module
         """
         super(ConditionAugmentor, self).__init__()
 
         assert latent_size % 2 == 0, "Latent manifold has odd number of dimensions"
 
         # state of the object
+        self.device = device
         self.input_size = input_size
         self.latent_size = latent_size
 
         # required modules:
-        self.transformer = th.nn.Linear(self.input_size, 2 * self.latent_size)
+        self.transformer = th.nn.Linear(self.input_size, 2 * self.latent_size).to(device)
 
     def forward(self, x):
         """
@@ -39,7 +41,7 @@ class ConditionAugmentor(th.nn.Module):
         mid_point = self.latent_size
         mus, sigmas = combined[:, :mid_point], combined[:, mid_point:]
 
-        epsilon = th.randn(*mus.shape)
+        epsilon = th.randn(*mus.shape).to(self.device)
         c_not_hat = (epsilon * sigmas) + mus
 
         return c_not_hat

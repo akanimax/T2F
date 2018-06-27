@@ -1,2 +1,4 @@
-# for implementing the folder structure ... :p
+# ignore all the generated samples and trained models
+*.png
+*.pth
 
