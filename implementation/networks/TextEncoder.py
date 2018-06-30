@@ -39,5 +39,5 @@ class Encoder(th.nn.Module):
         :param x: input numeric sequence
         :return: enc_emb: encoded text embedding
         """
-        _, (enc_emb, _) = self.network(x)
-        return enc_emb[-1]  # return the deepest embedding
+        output, (_, _) = self.network(x)
+        return output[:, -1, :]  # return the deepest last (hidden state) embedding

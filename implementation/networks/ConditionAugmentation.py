@@ -32,7 +32,7 @@ class ConditionAugmentor(th.nn.Module):
         """
         forward pass (computations)
         :param x: input
-        :return: c_not_hat => augmented text embeddings
+        :return: c_not_hat, mus, sigmas => augmented text embeddings, means, stds
         """
         # apply the feed forward layer:
         combined = self.transformer(x)
@@ -44,4 +44,4 @@ class ConditionAugmentor(th.nn.Module):
         epsilon = th.randn(*mus.shape).to(self.device)
         c_not_hat = (epsilon * sigmas) + mus
 
-        return c_not_hat
+        return c_not_hat, mus, sigmas

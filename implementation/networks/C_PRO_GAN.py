@@ -412,7 +412,8 @@ class ProGAN:
         for p in self.dis.parameters():
             p.requires_grad = True
 
-    def optimize_discriminator(self, noise, embeddings, real_batch, depth, alpha):
+    def optimize_discriminator(self, noise, embeddings, real_batch, depth, alpha,
+                               use_matching_aware=True):
         """
         performs one step of weight update on discriminator using the batch of data
         :param noise: input noise of sample generation
@@ -420,6 +421,7 @@ class ProGAN:
         :param real_batch: real samples batch
         :param depth: current depth of optimization
         :param alpha: current alpha for fade-in
+        :param use_matching_aware: whether to use a matching aware discriminator or not
         :return: current loss (Wasserstein loss)
         """
         from torch.nn import AvgPool2d
@@ -440,10 +442,15 @@ class ProGAN:
             gp = self.__gradient_penalty(real_samples, fake_samples, embeddings,
                                          depth, alpha)
 
+            # calculate the matching aware distribution loss
+            mis_match_text = embeddings[np.random.permutation(embeddings.shape[0]), :]
+            m_a_d = self.dis(real_samples, mis_match_text, depth, alpha) if use_matching_aware \
+                else 0
+
             # define the (Wasserstein) loss
             fake_out = self.dis(fake_samples, embeddings, depth, alpha)
             real_out = self.dis(real_samples, embeddings, depth, alpha)
-            loss = (th.mean(fake_out) - th.mean(real_out)
+            loss = (th.mean(fake_out) + th.mean(m_a_d) - th.mean(real_out)
                     + gp + (self.drift * th.mean(real_out ** 2)))
 
             # optimize discriminator

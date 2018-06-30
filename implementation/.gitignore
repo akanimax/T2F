@@ -2,3 +2,5 @@
 *.png
 *.pth
 
+# ignore the training_runs folder:
+training_runs/
