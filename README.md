@@ -81,6 +81,11 @@ __Sample configuration:__
     checkpoint_factor: 2  # save the models after these many epochs
     use_matching_aware_discriminator: True  # use the matching aware discriminator
 
+Use the `requirements.txt` to install all the dependencies for the project. 
+    
+    $ workon [your virtual environment]
+    $ pip install -r requirements.txt
+
 __Sample run:__
 
     $ mkdir training_runs
@@ -93,6 +98,5 @@ blog: https://medium.com/@animeshsk3/t2f-text-to-face-generation-using-deep-lear
 training_time_lapse video: https://www.youtube.com/watch?v=NO_l87rPDb8 <br>
 
 ## #TODO:
-1.) Add a `requirements.txt` for easier installation <br>
-2.) Create a simple `demo.py` for running inference on the trained models <br>
-3.) Separate the `implementation/networks/C_Pro_GAN.py` as a standalone library <br>
+1.) Create a simple `demo.py` for running inference on the trained models <br>
+2.) Separate the `implementation/networks/C_Pro_GAN.py` as a standalone library <br>
