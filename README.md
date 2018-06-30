@@ -12,7 +12,7 @@ The textual description is encoded into a summary vector using an LSTM network. 
 ## Running the code:
 The code is present in the `implementation/` subdirectory. The implementation is done using the <a href="https://pytorch.org/"> PyTorch</a> framework. So, for running this code, please install `PyTorch version 0.4.0` before continuing.
 
-__Code organization:__
+__Code organization:__ <br>
 `configs`: contains the configuration files for training the network. (You can use any one, or create your own) <br>
 `data_processing`: package containing data processing and loading modules <br>
 `networks`: package contains network implementation <br>
