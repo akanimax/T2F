@@ -7,3 +7,4 @@ very_temp.py
 
 # ignore the output videos (the video to be published is titled training_time_lapse.mp4)
 output*
+training_time_lapse_hd.mp4
