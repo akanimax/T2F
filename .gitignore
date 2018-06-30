@@ -105,3 +105,6 @@ venv.bak/
 
 # ignore pycharm files
 .idea/
+
+# ignore blog material
+blog_material/
