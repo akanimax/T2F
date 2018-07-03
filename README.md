@@ -96,7 +96,7 @@ __Sample run:__
 ## Other links:
 blog: https://medium.com/@animeshsk3/t2f-text-to-face-generation-using-deep-learning-b3b6ba5a5a93 <br>
 training_time_lapse video: https://www.youtube.com/watch?v=NO_l87rPDb8 <br>
+ProGAN package (Seperate library): https://github.com/akanimax/pro_gan_pytorch
 
 ## #TODO:
 1.) Create a simple `demo.py` for running inference on the trained models <br>
-2.) Separate the `implementation/networks/C_Pro_GAN.py` as a standalone library <br>
