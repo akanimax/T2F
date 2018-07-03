@@ -4,3 +4,6 @@
 
 # ignore the training_runs folder:
 training_runs/
+
+# ignore the tf-hub_modules cache
+tf-hub_modules/
