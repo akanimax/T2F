@@ -1,0 +1,7 @@
+tensorflow==1.7.0
+numpy==1.13.1
+Pillow==5.1.0
+easydict==1.7
+torch==0.4.0
+torchvision==0.2.1
+PyYAML==3.12
