@@ -2,3 +2,7 @@
 lfw/
 
 # data download link -> http://vis-www.cs.umass.edu/lfw/lfw.tgz (or you can try the variants of the same dataset)
+
+# ignore the Face2Text dataset (Please contact authors of paper) for the dataset.
+# -> https://arxiv.org/abs/1803.03827
+Face2Text/
