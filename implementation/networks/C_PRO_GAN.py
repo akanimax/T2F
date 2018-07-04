@@ -460,7 +460,7 @@ class ProGAN:
 
             loss_val += loss.item()
 
-        return -(loss_val / self.n_critic)
+        return loss_val / self.n_critic
 
     def optimize_generator(self, noise, embeddings, depth, alpha):
         """
@@ -485,4 +485,4 @@ class ProGAN:
         self.gen_optim.step()
 
         # return the loss value
-        return -loss.item()
+        return loss.item()

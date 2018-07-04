@@ -203,13 +203,13 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
             if epoch % checkpoint_factor == 0 or epoch == 0:
                 # save the Model
                 encoder_save_file = os.path.join(save_dir, "Encoder_" +
-                                                 str(current_depth) + "_" + str(epoch) + ".pth")
+                                                 str(current_depth) + ".pth")
                 ca_save_file = os.path.join(save_dir, "Condition_Augmentor_" +
-                                            str(current_depth) + "_" + str(epoch) + ".pth")
+                                            str(current_depth) + ".pth")
                 gen_save_file = os.path.join(save_dir, "GAN_GEN_" +
-                                             str(current_depth) + "_" + str(epoch) + ".pth")
+                                             str(current_depth) + ".pth")
                 dis_save_file = os.path.join(save_dir, "GAN_DIS_" +
-                                             str(current_depth) + "_" + str(epoch) + ".pth")
+                                             str(current_depth) + ".pth")
 
                 th.save(encoder.state_dict(), encoder_save_file, pickle)
                 th.save(ca.state_dict(), ca_save_file, pickle)
