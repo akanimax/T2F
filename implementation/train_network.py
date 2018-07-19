@@ -145,7 +145,7 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
                 # perform text_work:
                 embeddings = encoder(captions)
                 if not isinstance(embeddings, th.Tensor):
-                    embeddings = th.tensor(embeddings, device=device)
+                    embeddings = th.tensor(embeddings).to(device)
                 c_not_hats, mus, sigmas = ca(embeddings)
 
                 z = th.randn(
@@ -279,7 +279,8 @@ def main(args):
         )
         from networks.TextEncoder import PretrainedEncoder
         # create a new session object for the pretrained encoder:
-        session = tf.Session()
+        sess_config = tf.ConfigProto(device_count={"GPU": 0})
+        session = tf.Session(config=sess_config)
         text_encoder = PretrainedEncoder(
             session=session,
             module_dir=config.pretrained_encoder_dir,
