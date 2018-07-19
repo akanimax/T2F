@@ -8,6 +8,7 @@ import yaml
 import os
 import pickle
 import timeit
+import tensorflow as tf
 
 # define the device for the training script
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
@@ -54,7 +55,7 @@ def get_config(conf_file):
 
 def create_grid(samples, scale_factor, img_file, width=2, real_imgs=False):
     """
-    utility funtion to create a grid of GAN samples
+    utility function to create a grid of GAN samples
     :param samples: generated samples for storing
     :param scale_factor: factor for upscaling the image
     :param img_file: name of file to write
@@ -65,9 +66,9 @@ def create_grid(samples, scale_factor, img_file, width=2, real_imgs=False):
     from torchvision.utils import save_image
     from torch.nn.functional import upsample
 
-    samples = (samples / 2) + 0.5
+    samples = th.clamp((samples / 2) + 0.5, min=0, max=1)
 
-    # upsmaple the image
+    # upsample the image
     if scale_factor > 1 and not real_imgs:
         samples = upsample(samples, scale_factor=scale_factor)
 
@@ -79,19 +80,26 @@ def create_descriptions_file(file, captions, dataset):
     """
     utility function to create a file for storing the captions
     :param file: file for storing the captions
-    :param captions: encoded_captions
+    :param captions: encoded_captions or raw captions
     :param dataset: the dataset object for transforming captions
     :return: None (saves a file)
     """
     from functools import reduce
 
     # transform the captions to text:
-    captions = list(map(lambda x: dataset.get_english_caption(x.cpu()),
-                        [captions[i] for i in range(captions.shape[0])]))
-    with open(file, "w") as filler:
-        for caption in captions:
-            filler.write(reduce(lambda x, y: x + " " + y, caption, ""))
-            filler.write("\n\n")
+    if isinstance(captions, th.Tensor):
+        captions = list(map(lambda x: dataset.get_english_caption(x.cpu()),
+                            [captions[i] for i in range(captions.shape[0])]))
+
+        with open(file, "w") as filler:
+            for caption in captions:
+                filler.write(reduce(lambda x, y: x + " " + y, caption, ""))
+                filler.write("\n\n")
+    else:
+        with open(file, "w") as filler:
+            for caption in captions:
+                filler.write(caption)
+                filler.write("\n\n")
 
 
 def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
@@ -100,6 +108,8 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
                    log_dir, sample_dir, checkpoint_factor,
                    save_dir, use_matching_aware_dis=True):
     assert c_pro_gan.depth == len(batch_sizes), "batch_sizes not compatible with depth"
+    assert c_pro_gan.depth == len(epochs), "epochs_sizes not compatible with depth"
+    assert c_pro_gan.depth == len(fade_in_percentage), "fip_sizes not compatible with depth"
 
     print("Starting the training process ... ")
     for current_depth in range(start_depth, c_pro_gan.depth):
@@ -109,39 +119,58 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
         print("Current resolution: %d x %d" % (current_res, current_res))
 
         data = dl.get_data_loader(dataset, batch_sizes[current_depth], num_workers)
-        fader_point = int((fade_in_percentage[current_depth] / 100) * epochs[current_depth])
+
+        ticker = 1
 
         for epoch in range(1, epochs[current_depth] + 1):
             start = timeit.default_timer()  # record time at the start of epoch
 
             print("\nEpoch: %d" % epoch)
             total_batches = len(iter(data))
+            fader_point = int((fade_in_percentage[current_depth] / 100)
+                              * epochs[current_depth] * total_batches)
 
             for (i, batch) in enumerate(data, 1):
                 # calculate the alpha for fading in the layers
-                alpha = epoch / fader_point if epoch <= fader_point else 1
+                alpha = ticker / fader_point if ticker <= fader_point else 1
 
                 # extract current batch of data for training
                 captions, images = batch
-                captions, images = captions.to(device), images.to(device)
+
+                if encoder_optim is not None:
+                    captions = captions.to(device)
+
+                images = images.to(device)
 
                 # perform text_work:
                 embeddings = encoder(captions)
+                if not isinstance(embeddings, th.Tensor):
+                    embeddings = th.tensor(embeddings, device=device)
                 c_not_hats, mus, sigmas = ca(embeddings)
+
                 z = th.randn(
-                    captions.shape[0],
+                    captions.shape[0] if isinstance(captions, th.Tensor) else len(captions),
                     c_pro_gan.latent_size - c_not_hats.shape[-1]
                 ).to(device)
 
                 gan_input = th.cat((c_not_hats, z), dim=-1)
 
                 # optimize the discriminator:
-                dis_loss = c_pro_gan.optimize_discriminator(gan_input, embeddings,
-                                                            images, current_depth, alpha,
+                dis_loss = c_pro_gan.optimize_discriminator(gan_input, images,
+                                                            embeddings, current_depth, alpha,
                                                             use_matching_aware_dis)
 
                 # optimize the generator:
-                encoder_optim.zero_grad()
+                z = th.randn(
+                    captions.shape[0] if isinstance(captions, th.Tensor) else len(captions),
+                    c_pro_gan.latent_size - c_not_hats.shape[-1]
+                ).to(device)
+
+                gan_input = th.cat((c_not_hats, z), dim=-1)
+
+                if encoder_optim is not None:
+                    encoder_optim.zero_grad()
+
                 ca_optim.zero_grad()
                 gen_loss = c_pro_gan.optimize_generator(gan_input, embeddings,
                                                         current_depth, alpha)
@@ -155,16 +184,19 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
                                                - th.log((sigmas ** 2)) - 1, dim=1))
                 kl_loss.backward()
                 ca_optim.step()
-                encoder_optim.step()
+                if encoder_optim is not None:
+                    encoder_optim.step()
 
                 # provide a loss feedback
                 if i % int(total_batches / feedback_factor) == 0 or i == 1:
-                    print("batch: %d  d_loss: %f  g_loss: %f" % (i, dis_loss, gen_loss))
+                    print("batch: %d  d_loss: %f  g_loss: %f  kl_los: %f"
+                          % (i, dis_loss, gen_loss, kl_loss.item()))
 
                     # also write the losses to the log file:
                     log_file = os.path.join(log_dir, "loss_" + str(current_depth) + ".log")
                     with open(log_file, "a") as log:
-                        log.write(str(dis_loss) + "\t" + str(gen_loss) + "\n")
+                        log.write(str(dis_loss) + "\t" + str(gen_loss)
+                                  + "\t" + str(kl_loss.item()) + "\n")
 
                     # create a grid of samples and save it
                     gen_img_file = os.path.join(sample_dir, "gen_" + str(current_depth) +
@@ -197,6 +229,9 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
 
                     create_descriptions_file(description_file, captions, dataset)
 
+                # increment the ticker:
+                ticker += 1
+
             stop = timeit.default_timer()
             print("Time taken for epoch: %.3f secs" % (stop - start))
 
@@ -211,7 +246,8 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
                 dis_save_file = os.path.join(save_dir, "GAN_DIS_" +
                                              str(current_depth) + ".pth")
 
-                th.save(encoder.state_dict(), encoder_save_file, pickle)
+                if encoder_optim is not None:
+                    th.save(encoder.state_dict(), encoder_save_file, pickle)
                 th.save(ca.state_dict(), ca_save_file, pickle)
                 th.save(c_pro_gan.gen.state_dict(), gen_save_file, pickle)
                 th.save(c_pro_gan.dis.state_dict(), dis_save_file, pickle)
@@ -228,28 +264,48 @@ def main(args):
 
     from networks.TextEncoder import Encoder
     from networks.ConditionAugmentation import ConditionAugmentor
-    from networks.C_PRO_GAN import ProGAN
+    from networks.PRO_GAN import ConditionalProGAN
 
     print(args.config)
     config = get_config(args.config)
     print("Current Configuration:", config)
 
     # create the dataset for training
-    dataset = dl.Face2TextDataset(
-        pro_pick_file=config.processed_text_file,
-        img_dir=config.images_dir,
-        img_transform=dl.get_transform(config.img_dims),
-        captions_len=config.captions_length
-    )
+    if config.use_pretrained_encoder:
+        dataset = dl.RawTextFace2TextDataset(
+            annots_file=config.annotations_file,
+            img_dir=config.images_dir,
+            img_transform=dl.get_transform(config.img_dims)
+        )
+        from networks.TextEncoder import PretrainedEncoder
+        # create a new session object for the pretrained encoder:
+        session = tf.Session()
+        text_encoder = PretrainedEncoder(
+            session=session,
+            module_dir=config.pretrained_encoder_dir,
+            download=config.download_pretrained_encoder
+        )
+        encoder_optim = None
+    else:
+        dataset = dl.Face2TextDataset(
+            pro_pick_file=config.processed_text_file,
+            img_dir=config.images_dir,
+            img_transform=dl.get_transform(config.img_dims),
+            captions_len=config.captions_length
+        )
+        text_encoder = Encoder(
+            embedding_size=config.embedding_size,
+            vocab_size=dataset.vocab_size,
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            device=device
+        )
+        encoder_optim = th.optim.Adam(text_encoder.parameters(),
+                                      lr=config.learning_rate,
+                                      betas=(config.beta_1, config.beta_2),
+                                      eps=config.eps)
 
     # create the networks
-    text_encoder = Encoder(
-        embedding_size=config.embedding_size,
-        vocab_size=dataset.vocab_size,
-        hidden_size=config.hidden_size,
-        num_layers=config.num_layers,
-        device=device
-    )
 
     if args.encoder_file is not None:
         print("Loading encoder from:", args.encoder_file)
@@ -258,6 +314,7 @@ def main(args):
     condition_augmenter = ConditionAugmentor(
         input_size=config.hidden_size,
         latent_size=config.ca_out_size,
+        use_eql=config.use_eql,
         device=device
     )
 
@@ -265,16 +322,21 @@ def main(args):
         print("Loading conditioning augmenter from:", args.ca_file)
         condition_augmenter.load_state_dict(th.load(args.ca_file))
 
-    c_pro_gan = ProGAN(
+    c_pro_gan = ConditionalProGAN(
         embedding_size=config.hidden_size,
         depth=config.depth,
         latent_size=config.latent_size,
+        compressed_latent_size=config.compressed_latent_size,
         learning_rate=config.learning_rate,
         beta_1=config.beta_1,
         beta_2=config.beta_2,
         eps=config.eps,
         drift=config.drift,
         n_critic=config.n_critic,
+        use_eql=config.use_eql,
+        loss=config.loss_function,
+        use_ema=config.use_ema,
+        ema_decay=config.ema_decay,
         device=device
     )
 
@@ -286,12 +348,7 @@ def main(args):
         print("Loading discriminator from:", args.discriminator_file)
         c_pro_gan.dis.load_state_dict(th.load(args.discriminator_file))
 
-    # create the optimizers for Encoder and Condition Augmenter separately
-    encoder_optim = th.optim.Adam(text_encoder.parameters(),
-                                  lr=config.learning_rate,
-                                  betas=(config.beta_1, config.beta_2),
-                                  eps=config.eps)
-
+    # create the optimizer for Condition Augmenter separately
     ca_optim = th.optim.Adam(condition_augmenter.parameters(),
                              lr=config.learning_rate,
                              betas=(config.beta_1, config.beta_2),

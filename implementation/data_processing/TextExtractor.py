@@ -36,7 +36,7 @@ def read_annotations(file_path):
 def basic_preprocess(descriptions):
     """
     basic preprocessing on the input data
-    :param descriptions: list[lists[strings]]
+    :param descriptions: list[strings]
     :return: dat => list[lists[string]]
     """
 

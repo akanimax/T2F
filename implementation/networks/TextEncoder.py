@@ -64,7 +64,7 @@ class PretrainedEncoder:
             module_dir = "~/.tensorflow_hub_modules/text_encoder"
 
         self.download_path = \
-            "https://www.tensorflow.org/hub/modules/google/universal-sentence-encoder/2"
+            "https://tfhub.dev/google/universal-sentence-encoder/2"
         self.module_dir = module_dir
         self.session = session
 
@@ -85,7 +85,7 @@ class PretrainedEncoder:
         self.session.run(tf.global_variables_initializer())
         self.session.run(tf.tables_initializer())
 
-    def embed_text(self, text_list):
+    def __call__(self, text_list):
         """
         encode the given texts into a summary embedding
         :param text_list: list[strings] (Note, this needs to be a list of strings not tokens)

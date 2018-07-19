@@ -91,6 +91,69 @@ class Face2TextDataset(Dataset):
         return list(map(lambda x: self.vocab[x], sent.numpy()))
 
 
+class RawTextFace2TextDataset(Dataset):
+    """ PyTorch Dataset wrapper around the Face2Text dataset
+        Raw text version
+    """
+
+    def __load_data(self):
+        """
+        private helper for loading the annotations and file names from the annotations file
+        :return: images, descs => images and descriptions
+        """
+        from data_processing.TextExtractor import read_annotations, basic_preprocess
+        images, descs = read_annotations(self.annots_file_path)
+        # preprocess the descriptions:
+        descs = basic_preprocess(descs)
+
+        return images, descs
+
+    def __init__(self, annots_file, img_dir, img_transform=None):
+        """
+        constructor of the class
+        :param annots_file: annotations file
+        :param img_dir: path to the images directory
+        :param img_transform: torch_vision transform to apply
+        """
+
+        # create state:
+        self.base_path = img_dir
+        self.annots_file_path = annots_file
+        self.transform = img_transform
+
+        self.images, self.descs = self.__load_data()
+
+        # extract all the data
+
+    def __len__(self):
+        """
+        obtain the length of the data-items
+        :return: len => length
+        """
+        return len(self.images)
+
+    def __getitem__(self, ix):
+        """
+        code to obtain a specific item at the given index
+        :param ix: index for element query
+        :return: (caption, img) => caption and the image
+        """
+
+        # read the image at the given index
+        img_file_path = os.path.join(self.base_path, self.images[ix])
+        img = PIL.Image.open(img_file_path)
+
+        # transform the image if required
+        if self.transform is not None:
+            img = self.transform(img)
+
+        # get the raw_text caption:
+        caption = self.descs[ix]
+
+        # return the data element
+        return caption, img
+
+
 def get_transform(new_size=None):
     """
     obtain the image transforms required for the input data
