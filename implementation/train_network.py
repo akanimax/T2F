@@ -157,7 +157,8 @@ def train_networks(encoder, ca, c_pro_gan, dataset, epochs,
 
                 # optimize the discriminator:
                 dis_loss = c_pro_gan.optimize_discriminator(gan_input, images,
-                                                            embeddings, current_depth, alpha,
+                                                            embeddings.detach(),
+                                                            current_depth, alpha,
                                                             use_matching_aware_dis)
 
                 # optimize the generator:
@@ -279,7 +280,8 @@ def main(args):
         )
         from networks.TextEncoder import PretrainedEncoder
         # create a new session object for the pretrained encoder:
-        sess_config = tf.ConfigProto(device_count={"GPU": 0})
+        sess_config = tf.ConfigProto()
+        sess_config.gpu_options.per_process_gpu_memory_fraction = config.p_proc_gpu_mem
         session = tf.Session(config=sess_config)
         text_encoder = PretrainedEncoder(
             session=session,

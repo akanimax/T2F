@@ -7,3 +7,6 @@ training_runs/
 
 # ignore the tf-hub_modules cache
 tf-hub_modules/
+
+# ignore the archived training
+archived/
