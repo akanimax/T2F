@@ -28,7 +28,7 @@ class ConditionAugmentor(th.nn.Module):
 
         # required modules:
         if use_eql:
-            from networks.CustomLayers import _equalized_linear
+            from pro_gan_pytorch.CustomLayers import _equalized_linear
             self.transformer = _equalized_linear(self.input_size, 2 * self.latent_size).to(device)
         else:
             self.transformer = th.nn.Linear(self.input_size, 2 * self.latent_size).to(device)

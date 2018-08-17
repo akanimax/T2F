@@ -264,7 +264,7 @@ def main(args):
 
     from networks.TextEncoder import Encoder
     from networks.ConditionAugmentation import ConditionAugmentor
-    from networks.PRO_GAN import ConditionalProGAN
+    from pro_gan_pytorch.PRO_GAN import ConditionalProGAN
 
     print(args.config)
     config = get_config(args.config)
