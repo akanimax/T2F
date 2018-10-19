@@ -1,9 +1,5 @@
 """ Module defining the text encoder used for conditioning the generation of the GAN """
 
-import os
-
-import tensorflow as tf
-import tensorflow_hub as hub
 import torch as th
 
 
@@ -31,7 +27,7 @@ class Encoder(th.nn.Module):
 
         # create the LSTM layer:
         from torch.nn import Embedding, Sequential, LSTM
-        self. network = Sequential(
+        self.network = Sequential(
             Embedding(self.vocab_size, self.embedding_size, padding_idx=0),
             LSTM(self.embedding_size, self.hidden_size,
                  self.num_layers, batch_first=True)
@@ -47,48 +43,56 @@ class Encoder(th.nn.Module):
         return output[:, -1, :]  # return the deepest last (hidden state) embedding
 
 
-class PretrainedEncoder:
+class PretrainedEncoder(th.nn.Module):
     """
-    Uses the TensorFlow Hub's module here ->
-    https://www.tensorflow.org/hub/modules/google/universal-sentence-encoder/2
+    Uses the Facebook's InferSent PyTorch module here ->
+    https://github.com/facebookresearch/InferSent
+
+    I have modified the implementation slightly in order to suit my use.
+    Note that I am Giving proper Credit to the original
+    InferSent Code authors by keeping a copy their LICENSE here.
+
+    Unlike some people who have copied my code without regarding my LICENSE
+
+    @Args:
+        :param model_file: path to the pretrained '.pkl' model file
+        :param embedding_file: path to the pretrained glove embeddings file
+        :param vocab_size: size of the built vocabulary
+                           default: 300000
+        :param device: device to run the network on
+                       default: "CPU"
     """
 
-    def __init__(self, session, module_dir=None, download=True):
+    def __init__(self, model_file, embedding_file,
+                 vocab_size=300000, device=th.device("cpu")):
         """
-        constructor for the class
-        :param session: TensorFlow session object
-        :param module_dir: directory of an already downloaded module / where to download
-        :param download: Boolean for whether to download
+        constructor of the class
         """
-        if module_dir is None:
-            module_dir = "~/.tensorflow_hub_modules/text_encoder"
+        from networks.InferSent.models import InferSent
 
-        self.download_path = \
-            "https://tfhub.dev/google/universal-sentence-encoder/2"
-        self.module_dir = module_dir
-        self.session = session
+        super().__init__()
 
-        if download:
-            os.environ['TFHUB_CACHE_DIR'] = module_dir
-            self.module = hub.Module(self.download_path)
+        # this is fixed
+        self.encoder = InferSent({
+            'bsize': 64, 'word_emb_dim': 300,
+            'enc_lstm_dim': 2048, 'pool_type': 'max',
+            'dpout_model': 0.0, 'version': 2}).to(device)
 
-        else:
-            self.module = hub.Module(self.module_dir)
+        # load the model and embeddings into the model:
+        self.encoder.load_state_dict(th.load(model_file))
 
-        self.__run_initializers()
+        # load the vocabulary file and build the vocabulary
+        self.encoder.set_w2v_path(embedding_file)
+        self.encoder.build_vocab_k_words(vocab_size)
 
-    def __run_initializers(self):
+    def forward(self, x):
         """
-        private helper method for initializing the graph with it's variables
-        :return: None
+        forward pass of the encoder
+        :param x: input sentences to be encoded
+                  list[Strings]
+        :return: encodings for the sentences
+                 shape => [batch_size x 4096]
         """
-        self.session.run(tf.global_variables_initializer())
-        self.session.run(tf.tables_initializer())
 
-    def __call__(self, text_list):
-        """
-        encode the given texts into a summary embedding
-        :param text_list: list[strings] (Note, this needs to be a list of strings not tokens)
-        :return: embeddings => np array of shape => [*(variable) x embedding_size ()]
-        """
-        return self.session.run(self.module(text_list))
+        # we just need the encodings here
+        return self.encoder.encode(x, tokenize=False)[0]
