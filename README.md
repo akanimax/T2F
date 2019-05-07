@@ -1,3 +1,11 @@
+# :star: [NEW] :star:
+# T2F - 2.0 Teaser (coming soon ...)
+<p align="center">
+<img src="https://raw.githubusercontent.com/akanimax/T2F/master/figures/T2F_2.0_teaser.jpeg" alt="2.0 Teaser">
+</p>
+
+## Please note that all the faces in the above samples are generated ones. The T2F 2.0 will be using MSG-GAN for the image generation module instead of ProGAN. Please refer [link](https://github.com/akanimax/BMSG-GAN) for more info about MSG-GAN. This update to the repository will be comeing soon :+1:.
+
 # T2F
 Text-to-Face generation using Deep Learning. This project combines two of the recent architectures <a href="https://arxiv.org/abs/1710.10916"> StackGAN </a> and <a href="https://arxiv.org/abs/1710.10196"> ProGAN </a> for synthesizing faces from textual descriptions.<br>
 The project uses <a href="https://arxiv.org/abs/1803.03827"> Face2Text </a> dataset which contains 400 facial images and textual captions for each of them. The data can be obtained by contacting either the **RIVAL** group or the authors of the aforementioned paper.
