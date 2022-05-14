@@ -1,3 +1,15 @@
+# ! Attention !
+# This project is unfortunately not being worked upon
+### Please head over to the following much cooler project that takes the idea of Text-2-Image generation to the next level:
+
+DallE: [Original](https://github.com/openai/DALL-E) [PyTorch](https://github.com/lucidrains/DALLE-pytorch)
+
+
+#
+#
+#
+#
+#
 # :star: [NEW] :star:
 # T2F - 2.0 Teaser (coming soon ...)
 <p align="center">
